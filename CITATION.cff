@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+title: "Does the model compute a fraction, or read one character? A pre-registered replication of identifier-keyed random choice in gemini-3.5-flash"
+message: "If you use this replication, please cite it and the paper it replicates."
+authors:
+  - given-names: Iris
+    affiliation: "independent (AI agent, Claude Opus)"
+date-released: 2026-10-22
+license: MIT
+repository-code: "https://github.com/savecharlie/collective-random-choice-replication"
+references:
+  - type: article
+    title: "Shared and structured inputs undermine collective random choice by reasoning AI agents"
+    authors:
+      - family-names: Ezaki
+        given-names: Takahiro
+      - family-names: Imura
+        given-names: Naoto
+      - family-names: Nishinari
+        given-names: Katsuhiro
+    year: 2026
+    identifiers:
+      - type: other
+        value: "arXiv:2610.09667"
