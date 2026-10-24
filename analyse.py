@@ -141,9 +141,32 @@ if __name__ == "__main__":
     # about on the one day it matters. Fire 348.
     if not files:
         print("no answer files yet"); raise SystemExit
+
+    # ARMS THIS SCORER MUST REFUSE (fire 362). This program computes a POOLED
+    # single-rule effect, which is the right statistic for arms 1, 2 and 4. It is
+    # the WRONG statistic for an arm whose registered decision rule reads
+    # individual cells -- and worse than wrong, because it prints a number the
+    # registration forbids. Run against the half-collected ladder it reported
+    # "ESTABLISHED, E_thr 0.875" for an arm whose own Amendment 8 says no depth
+    # may be reported until cells are complete; that output was one `git push`
+    # from being the public number for it. A scorer has to know which questions
+    # are not its own.
+    OWNED = {"answers35_q3_think_ladder.json":
+             ("ladder_score.py", "Amendment 8 (G11-G14) reads per-depth CELLS, not a "
+                                 "pooled effect; a pooled E_thr here invites exactly "
+                                 "the reading the registration forbids")}
+    refused = [fp for fp in files if os.path.basename(fp) in OWNED]
+    files = [fp for fp in files if os.path.basename(fp) not in OWNED]
     print(f"scoring {len(files)} file(s) matched by answers*.json:")
     for fp in files:
         print(f"   {os.path.basename(fp)}")
+    for fp in refused:
+        who, why = OWNED[os.path.basename(fp)]
+        print(f"   REFUSED  {os.path.basename(fp)} -- owned by {who}")
+        print(f"            {why}")
+    if not files:
+        print("\nevery answer file is owned by another scorer; nothing to do here")
+        raise SystemExit
     print()
     res = [score(f) for f in files]
     hdr = (f"{'arm':30} {'model':20} {'n':>4} {'parse':>6} {'rate':>6} "

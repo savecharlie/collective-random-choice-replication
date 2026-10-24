@@ -379,3 +379,138 @@ and the **participation rate alone** separates them:
 Arm 3 (`--thinking --random-draw`) is **deferred behind arm 4**. Arm 3 tests
 whether the rate comes out at q under a fair draw, and arm 2 has just demonstrated
 that the rate cannot identify the mechanism.
+
+---
+
+## Amendment 8 — ARM 5, the precision ladder (fire 362, 24 Oct 2026)
+
+**Registered BEFORE any arm-5 call is spent. Arm 4 is CLOSED and read; arm 5 has
+not been collected. `rules.ladder_identifiers` exists and is verified; no model
+has seen any of its identifiers.**
+
+Arm 4 closed at n = 32, 0 transport errors, every identifier with leading hex
+digit 5: rate **0.5312**, **E_threshold = +0.9375** (16/16 where the rule says
+participate, 1/16 where it says not), Fisher exact two-sided **p = 5.66e-08**,
+effect holding in all four strata (+1.000, +1.000, +0.750, +1.000), E_residue
+−0.0625. **G7 satisfied: threshold established over both single-hex-digit
+accounts.**
+
+**And "established" still does not say AT WHAT PRECISION,** which is the question
+the audit application actually turns on — a rule reading 4 bits of an identifier
+and a rule reading 128 have different attack surfaces, and that is the question
+put to the authors on 22 Oct. `precision.py` scores every K-digit-truncated
+account against the model's own choices and, more importantly, reports **how many
+rows can tell K-truncation apart from the full value at all.** On arm 4:
+
+| K | fits | rows that discriminate | model sided with trunc-K | p two-sided |
+|---|---|---|---|---|
+| 1 | 17/32 | 16 | 1/16 | 5.2e-04 |
+| 2 | 29/32 | 2 | 0/2 | 0.50 |
+| ≥3 | 31/32 | **0** | — | — |
+
+So arm 4 establishes **two hex digits (8 bits) decisively and nothing beyond it.**
+The two rows that could separate 2 digits from 3 both went the full-value way, and
+two rows is p = 0.50. **Arm 4 has no power at K ≥ 3 and that is a property of the
+design, not a result.**
+
+### The arm
+
+n = **40**, `rules.ladder_identifiers(1/3, seed=362)`. 1/3 is `0x0.5555…`
+repeating, so an identifier `('5' * j) + d + tail` has exact arithmetic: every
+truncation to K ≤ j digits reads `0x0.55…5` which is **below** 1/3, while the
+truncation to j+1 digits reads `0x0.55…5d` which for d ≥ 6 is **above** it. One
+identifier per depth j therefore separates "resolves ≤ j digits" from "resolves
+≥ j+1". Six depths j = 1…6, with **4 identifiers per side** at j = 1–4 and **2
+per side** at j = 5–6; residue balanced inside every (depth, side) cell. The
+`below` side (d ≤ 4) is the matched control where the full value *and* every
+truncation all say participate.
+
+Verified before registration, independently of the builder's own assertions: 40
+distinct ids, all 12 cells at their planned size, 0 mismatches over all 32
+truncation depths × 40 rows, residue balanced in every cell, byte-identical on a
+second construction. The j = 6 above-q identifiers sit **5e-9** from 1/3 — they
+require seven correct hex digits.
+
+Predicted participation on the above-q rows, by account:
+
+| account | j=1 | j=2 | j=3 | j=4 | j=5 | j=6 |
+|---|---|---|---|---|---|---|
+| resolves 1 hex digit | 1 | 1 | 1 | 1 | 1 | 1 |
+| resolves 2 | 0 | 1 | 1 | 1 | 1 | 1 |
+| resolves 3 | 0 | 0 | 1 | 1 | 1 | 1 |
+| resolves ≥7 (or exactly) | 0 | 0 | 0 | 0 | 0 | 0 |
+| no rule, coin at q | ~1/3 everywhere |
+
+### The decision rule, fixed now
+
+- **G11 — the depth reading.** `D` = the smallest j whose above-q cell shows
+  participation **≤ 0.25**, *provided every deeper cell is also ≤ 0.25*. Report
+  "the model resolves at least D−1 and fewer than D+1 hex digits". A
+  non-monotone pattern (a low cell with a high cell beneath it) is **reported as
+  non-monotone and no D is given** — it falsifies the whole truncation family,
+  which is the outcome I would least expect and most want on the record.
+- **G12 — the anchor, and the arm's own validity check.** The j=1 above-q cell
+  must come back **≤ 0.25**, replicating arm 4's 1/16. If it is **≥ 0.75** the
+  arm is **INVALID** — something moved between fires (model, prompt, key, quota
+  path) — and **no depth is reported from it.** A known answer carried inside the
+  new measurement, per the verified-core rule.
+- **G13 — the control floor.** The below-q rows, pooled, must show participation
+  **≥ 0.70**. Below 0.70 the model is declining to play on conspicuous
+  near-1/3 identifiers rather than applying a rule, and **no depth is reported**;
+  the arm is then reported as *refusal on conspicuous identifiers*, which is its
+  own finding and not a precision number.
+- **G14 — no ceiling.** If every above-q cell through j = 6 is **≥ 0.75**, report
+  "no resolution ceiling found at ≤ 7 hex digits" and **not** a number.
+- **Partial arms.** The depth reading uses **only cells that are complete**
+  (4 rows at j ≤ 4, 2 at j ≥ 5). A cell short of its planned size is reported as
+  incomplete and excluded from G11. This is Ruler 18's lesson stated in advance
+  rather than improvised when the quota cuts the arm.
+
+### Three things declared now rather than discovered later
+
+1. **These identifiers are conspicuous.** A prefix of five `5`s is a visible
+   signal that the number is near 1/3, and a model may behave differently on a
+   suspicious input than on a random one. That is exactly what G13's control
+   floor is for, and Gemini returns reasoning text, so the traces will be read
+   for any sign the model noticed. **If the traces show it noticed, the depth
+   number is reported with that caveat attached and not without it.**
+2. **The stratum map balances globally, not within depth cells** (40 rows,
+   10/10/10/10), so a label or line-order bias could in principle land unevenly
+   on one depth. Per-stratum participation is reported alongside D. With 4 rows
+   per cell this arm cannot rule that out, and saying so now is cheaper than
+   being asked later.
+3. **A truncation account is a proxy for precision, not a claim about mechanism.**
+   The model may compute the full value in a way that loses accuracy with depth
+   rather than literally truncating. `D` is the depth at which its answers stop
+   tracking the true comparison; it is not a claim that a truncation happens.
+
+### Correction to Amendment 8, limitation 1 — same fire, before any arm-5 row was scored
+
+Limitation 1 promised that Gemini's reasoning traces would be read for any sign
+the model noticed the conspicuous `5555…` prefix. **That promise could not be
+kept and should not have been written: `run_gemini.call()` never requested the
+thought summaries** (`includeThoughts` was never set), so every arm from fire 331
+onward stored only the JSON answer. The function's own comment claimed the traces
+"are kept whole rather than truncated." It was wrong for five fires.
+
+Found while trying to honour the caveat, which is the only reason it was found.
+
+**Arm 5 completes WITHOUT traces.** `--traces` now exists and is OFF by default:
+the arm is registered and half-collected, and the instrument does not change in
+the middle of the measurement. So limitation 1 is **withdrawn for arm 5** — the
+conspicuousness confound is declared, unmeasured, and stays declared. It is
+testable in a later arm and is not testable in this one. Nothing about G11–G14
+changes; this withdraws a piece of promised *evidence*, not a prediction.
+
+**And the reason the missing traces had not shown up as a bug: a second bug was
+hiding it.** `call()` concatenated every response part into one string, so a
+thought part would have been handed to `parse()` ahead of the answer. `parse()`
+reads the LAST JSON object, which survives that — unless the call hits
+MAX_TOKENS mid-reasoning and there is no answer part at all, in which case a
+deliberation's own discarded candidate (`Maybe {"action":"B"}. Actually no…`)
+scores as the row. Measured: `parse(trace)` returns **0**, a fabricated answer;
+with the parts separated it returns **None**, correctly unparseable. Ruler 1 of
+the cairn records exactly that MAX_TOKENS case returning `None` — it returned
+`None` only because the traces were absent. **Fixing either bug alone would have
+started silently fabricating rows.** The separation is fixed unconditionally and
+now, before `--traces` is ever used.

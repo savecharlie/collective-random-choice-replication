@@ -86,29 +86,93 @@ to the much more boring competitor. On this arm alone, "the model did
 arithmetic on a 128-bit integer" beats "the model glanced at one hex digit" by
 **one row**.
 
-### 6. ARM 4 — the bucket that separates them. PARTIAL, 15 of 32, and two accounts are already dead
+### 6. ARM 4 — the bucket that separates them. CLOSED, 32 of 32, G7 established
 
 Registered as **Amendment 7 before any call was spent** (G7–G10). n = 32
 identifiers whose **leading hex digit is 5** — value fraction in [0.3125, 0.375)
 — 16 below q and 16 at or above, residue balanced 8/8 inside each half
 (`rules.bucket5_identifiers`, which refuses rather than returning an unbalanced
 set). Inside that bucket the three accounts disagree everywhere, and the
-**participation rate alone** separates them: threshold ~0.50, digit<=4 ~0.00,
-digit<=5 ~1.00.
+**participation rate alone** separates them: threshold ≈ 0.50, digit ≤ 4 ≈ 0.00,
+digit ≤ 5 ≈ 1.00.
 
-The free-tier day closed at **15 parsed of 32**. That is half an arm and it is
-**not** a verdict on G7. But the rate is **6/15 = 0.400**, and that number does
-the one job that needs no strata and no effect size:
+Closed 24 Oct 2026, 32 sent, 32 parsed, 0 transport errors:
 
-- **G8 is dead.** P(>= 6 participations | p = 0.05) = **5.3e-05**.
-- **G9 is dead.** P(<= 6 participations | p = 0.95) = **7.4e-09**.
+| quantity | value |
+|---|---|
+| participation rate | **0.5312** |
+| threshold effect | **+0.9375** (16/16 predicted-participate vs 1/16 predicted-not) |
+| Fisher exact, two-sided | **p = 5.66 × 10⁻⁸** |
+| within the four label × line-order strata | +1.000, +1.000, +0.750, +1.000 |
+| residue effect | −0.0625 |
 
-Every identifier in this arm begins with `5`, and the model still discriminated
-**5 of 5 below q against 1 of 10 at or above** (partial E_thr = +0.900, reported
-as interim only — at n = 15 the strata are 1/5/5/4, which is the exact imbalance
-that contaminated arm 1, so the EFFECT is not clean yet). **The leading-digit
-kill does not use the effect or the strata at all — only the rate — so it stands
-on the partial arm.** G7 versus G10 needs the remaining 17 calls.
+**G7 is satisfied: the threshold rule is established over both single-hex-digit
+accounts.** One predicts a rate near zero inside this bucket and the other near
+one; 0.53 is neither, which kills G8 and G9 on the rate alone.
+
+`arm4_completions.py` had already shown, at 29 of 32, that **all eight ways the
+three missing rows could have fallen give G7** — so the final calls bought the
+balanced strata and the exact *p*, not the verdict. (That script now *refuses* to
+run, because its assertion that the missing rows share one cell fails on an empty
+set. A helper written to reason about a partial state should break rather than
+answer a question that no longer exists.)
+
+#### The prediction that failed a third time
+
+Every row in this arm sits within **0.037** of q. The two rows nearest the cut
+are 0.332651 and 0.335222 — a difference that first appears in the **fourth** hex
+digit — and the model answered both correctly. The single error ranks **22nd of
+32** by closeness to the cut. Arm 2 had already falsified "errors cluster at the
+boundary"; arm 4 is the strongest version of that test anyone could construct,
+because the whole arm *is* the boundary, and it is flat again.
+
+### 7. What G7 does NOT settle — precision, and `precision.py`
+
+"Threshold established" says nothing about **how many digits the model resolves**,
+which is the whole of the audit question: a rule reading 4 bits of an identifier
+and one reading 128 have different attack surfaces.
+
+`precision.py` scores every K-digit-truncated account against the model's own
+choices and — the half that matters — reports **how many rows can tell that
+account apart from the full 128-bit comparison at all.**
+
+| K | fits | rows that discriminate | model sided with trunc-K | p two-sided |
+|---|---|---|---|---|
+| 1 | 17/32 | 16 | 1/16 | 5.2 × 10⁻⁴ |
+| 2 | 29/32 | 2 | 0/2 | 0.50 |
+| ≥ 3 | 31/32 | **0** | — | — |
+
+**Two hex digits are established decisively. Nothing past them is.** The 31/32 at
+K ≥ 3 is not evidence of three digits: three and eight make identical predictions
+on every identifier in this set, so it is one number reported six times. The
+script prints the depths it has power against and names K ≥ 3 **UNTESTED**.
+
+### 8. ARM 5 — the precision ladder. REGISTERED, HALF-COLLECTED, NO NUMBER REPORTED
+
+Registered as **Amendment 8 (G11–G14)** before any call was spent. q = 1/3 is
+`0x0.5555…` repeating, so an identifier `('5' × j) + d + tail` has exact
+arithmetic: every truncation to K ≤ j digits reads **below** 1/3, while the
+truncation to j+1 reads **above** it whenever d ≥ 6. One identifier per depth *j*
+therefore separates "resolves ≤ j digits" from "resolves ≥ j+1", and walking *j*
+up the ladder reads the resolution depth off directly. n = 40, six depths,
+matched below-q controls at d ≤ 4 where the whole value *and* every truncation
+all say participate. The deepest rows sit **5 × 10⁻⁹** from 1/3.
+
+The free-tier day closed at **16 of 40**. Because the identifier order is
+shuffled, that leaves **zero of twelve cells complete**, and Amendment 8's
+partial-arm clause — written before the data existed, for exactly this — says the
+depth reading uses only complete cells. **So `ladder_score.py` reports no depth,
+and no number for this arm appears anywhere in this repository.** `analyse.py`
+*refuses* to score the file at all, because its pooled single-rule effect is the
+wrong statistic for a per-cell decision rule and printing one would invite the
+reading the registration forbids.
+
+Amendment 8's first limitation — that the model's reasoning traces would be read
+for any sign it noticed the conspicuous `5555…` prefix — is **withdrawn for this
+arm**, with the reason recorded in `PREREGISTRATION.md`: `run_gemini.call()` never
+requested the thought summaries, so no arm in this repository contains one. The
+function's own comment claimed they were kept. See Rulers 19–21 in `CAIRN.md`.
+
 
 ### 7. What the next fire does
 

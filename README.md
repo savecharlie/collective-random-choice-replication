@@ -125,25 +125,32 @@ alone** separates them:
 | first hex digit ≤ 4 | ≈ 0.00 |
 | first hex digit ≤ 5 | ≈ 1.00 |
 
-Free-tier quota closed the day at **15 of 32 parsed**. That is half an arm and
-**not** a verdict. But the rate is **6/15 = 0.400**, and the rate needs no strata
-and no effect size:
+**Closed 24 Oct 2026: 32 of 32 parsed, 0 transport errors.**
 
-- **"first hex digit ≤ 4" is dead**: P(≥ 6 participations | p = 0.05) = **5.3 × 10⁻⁵**
-- **"first hex digit ≤ 5" is dead**: P(≤ 6 participations | p = 0.95) = **7.4 × 10⁻⁹**
+| quantity | value |
+|---|---|
+| participation rate | **0.5312** |
+| threshold effect | **+0.9375** (16/16 vs 1/16) |
+| Fisher exact, two-sided | **p = 5.66 × 10⁻⁸** |
+| four label × line-order strata | +1.000, +1.000, +0.750, +1.000 |
+| residue effect | −0.0625 |
 
-So a *single-character* rule is already ruled out on the partial arm. **The live
-question — a truncated multi-digit comparison versus the full value — is not
-settled and I am not reporting a verdict on it.** It needs the remaining
-seventeen calls.
+Both *single-character* accounts are dead on the rate alone: one predicts ≈ 0 in
+this bucket and the other ≈ 1, and 0.53 is neither.
 
-Every identifier in this arm begins with `5`, and the model still split 5 of 5
-below *q* against 1 of 10 at or above. The effect is reported as interim only:
-at n = 15 the strata are 1/5/5/4, which is the exact imbalance that contaminated
-an earlier arm, so **the effect is not clean yet and the kill above deliberately
-does not use it.**
+**And "established" is not "established at what precision."** `precision.py`
+reports, beside each K-digit-truncated account's fit, how many identifiers can
+tell it apart from the full 128-bit comparison at all: **16 rows at K = 1
+(1/16 sided with it, p = 5.2 × 10⁻⁴), 2 rows at K = 2, and zero rows at K ≥ 3.**
+So the arm establishes **two hex digits** and has no power past them. The 31/32
+fit at K = 8 is one number reported six times.
 
----
+The arm that settles the digit count — **arm 5, the precision ladder** — is
+registered as Amendment 8 and is **half collected. No number for it appears in
+this repository**, because its registered rule reads per-depth cells and none of
+the twelve is complete. `analyse.py` refuses to score the file; `ladder_score.py`
+reports no depth. See RESULTS.md §8.
+
 
 ## A prediction of mine that failed, kept because it failed
 
@@ -168,7 +175,8 @@ Re-collecting needs `~/.gemini_api_key` and `run_gemini.py`.
 ```
 answers35_q3_nothink.json          arm 1, reasoning off,  64/64
 answers35_q3_think.json            arm 2, reasoning on,   64/64
-answers35_q3_think_bucket5.json    arm 4, first-digit-5,  15/32 parsed (partial)
+answers35_q3_think_bucket5.json    arm 4, first-digit-5,  32/32  CLOSED
+answers35_q3_think_ladder.json     arm 5, precision ladder, 16/40  PARTIAL, unscored
 ```
 
 Every answer row carries the identifier, the stratum, the raw model output and

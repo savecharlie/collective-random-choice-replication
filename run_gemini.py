@@ -271,14 +271,37 @@ def build(ident_line, q_str, stratum):
                          ident=ident_line), part_label
 
 
-def call(prompt, thinking, retries=6):
-    # 4096 was not enough: half the smoke-test calls hit MAX_TOKENS mid-reasoning
-    # and returned no JSON at all. The thinking traces are also the EVIDENCE
-    # here -- Gemini exposes them, which the paper's closed models did not --
-    # so they are kept whole rather than truncated.
+def call(prompt, thinking, retries=6, traces=False):
+    """Returns (answer_text, thought_text, finishReason).
+
+    4096 maxOutputTokens was not enough: half the smoke-test calls hit MAX_TOKENS
+    mid-reasoning and returned no JSON at all. Raised to 16384.
+
+    THE TRACE BUG, found fire 362 and worth the paragraph. The comment that stood
+    here said the thinking traces "are kept whole rather than truncated", because
+    Gemini exposes them and the paper's closed models did not. **The code never
+    kept them.** `includeThoughts` was never set, so every arm from 331 onward
+    stored only the JSON answer, and a docstring asserting the evidence was kept
+    sat on top of code that threw it away for five fires. Amendment 8 then
+    registered a caveat ("the traces will be read for any sign the model noticed")
+    that this function made unevaluable. A comment is a ruler too.
+
+    Two fixes, and only the second changes a byte on the wire:
+      1. thought parts are SEPARATED from answer parts instead of being
+         concatenated into one string. The old code ran `"".join(all parts)`, so
+         if a thought part ever had arrived it would have been fed to parse() as
+         though it were the answer. That is a latent correctness bug and it is
+         fixed unconditionally.
+      2. `traces=True` asks for the thought summaries. OFF BY DEFAULT, because
+         arm 5 was registered and half-collected without it and you do not change
+         the instrument in the middle of the measurement. Validate it on
+         identifiers belonging to no registered arm before using it in one.
+    """
     cfg = {"maxOutputTokens": 16384 if thinking else 64, "temperature": 1.0}
     if not thinking:
         cfg["thinkingConfig"] = {"thinkingBudget": 0}
+    elif traces:
+        cfg["thinkingConfig"] = {"includeThoughts": True}
     body = json.dumps({"contents": [{"parts": [{"text": prompt}]}],
                        "generationConfig": cfg}).encode()
     for a in range(retries):
@@ -288,8 +311,10 @@ def call(prompt, thinking, retries=6):
             with urllib.request.urlopen(req, timeout=180) as fh:
                 d = json.load(fh)
             c = d["candidates"][0]
-            txt = "".join(p.get("text", "") for p in c.get("content", {}).get("parts", []))
-            return txt, c.get("finishReason", "")
+            parts = c.get("content", {}).get("parts", [])
+            txt = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+            tho = "".join(p.get("text", "") for p in parts if p.get("thought"))
+            return txt, tho, c.get("finishReason", "")
         except urllib.error.HTTPError as e:
             full = e.read().decode(errors="replace")   # NOT truncated -- see below
             raw = full[:400]
@@ -673,6 +698,18 @@ if __name__ == "__main__":
                          "is 5 (value fraction in [0.3125,0.375)), the only region where "
                          "the threshold rule and a leading-digit heuristic disagree. "
                          "Balanced 16 below q / 16 at-or-above, residue 8/8 within each.")
+    ap.add_argument("--ladder", action="store_true",
+                    help="ARM 5 (Amendment 8): the PRECISION LADDER. Identifiers of the "
+                         "form ('5'*j)+d+tail, so every truncation to K<=j hex digits "
+                         "reads below 1/3 and K>=j+1 reads above it -- one identifier per "
+                         "depth j reads the model's resolution depth off directly. n=40, "
+                         "6 depths, matched below-q controls. Requires --q 1/3.")
+    ap.add_argument("--traces", action="store_true",
+                    help="ask Gemini for its thought summaries and store them in a "
+                         "`thoughts` field. OFF BY DEFAULT: arm 5 is registered and "
+                         "half-collected without it, and the instrument does not "
+                         "change mid-measurement. Validate on identifiers outside "
+                         "every registered arm before using it in one.")
     ap.add_argument("--random-draw", action="store_true",
                     help="add a random_draw field with no usage instruction (P5/paper fix)")
     ap.add_argument("--resume", action="store_true",
@@ -716,7 +753,20 @@ if __name__ == "__main__":
         sys.exit(0)
     num, den = (int(x) for x in a.q.split("/"))
     q = num / den
-    if a.bucket5:
+    if a.ladder and a.bucket5:
+        sys.exit("REFUSING: --ladder and --bucket5 are different arms; pick one")
+    if a.ladder:
+        ids, LADDER_META = rules.ladder_identifiers(q, seed=a.seed)
+        if a.n != len(ids):
+            sys.exit(f"REFUSING: --ladder is registered at n={len(ids)} "
+                     f"(Amendment 8); --n {a.n} was asked for. The arm size is "
+                     f"part of the registration, not a knob.")
+        from collections import Counter as _C
+        print(f"ARM 5 (--ladder): {len(ids)} identifiers, depths "
+              f"{dict(sorted(_C(j for j, _ in LADDER_META.values()).items()))}, "
+              f"{sum(1 for h in ids if rules.threshold_predicts(h,q))} below q. "
+              f"Decision rule registered in PREREGISTRATION.md Amendment 8 (G11-G14).")
+    elif a.bucket5:
         ids = rules.bucket5_identifiers(a.n, q, seed=a.seed)
         print(f"ARM 4 (--bucket5): {a.n} identifiers with leading hex digit 5, "
               f"{sum(1 for h in ids if rules.threshold_predicts(h,q))} below q. "
@@ -788,13 +838,14 @@ if __name__ == "__main__":
         stratum = STRATUM[h]          # Amendment 6: a map, never a draw
         prompt, pl = build(ident, a.q, stratum)
         serving = _fp(API_KEY)
-        txt, fin = call(prompt, a.thinking)
+        txt, tho, fin = call(prompt, a.thinking, traces=a.traces)
         chose = parse(txt, pl)
         rows.append({"id": h, "q": a.q, "thinking": a.thinking, "stratum": stratum,
                      "model": MODEL,
                      "utc": datetime.datetime.now(datetime.timezone.utc)
                              .isoformat(timespec="seconds"),
-                     "participate_label": pl, "raw": txt, "finish": fin,
+                     "participate_label": pl, "raw": txt, "thoughts": tho,
+                     "finish": fin,
                      "key": serving,
                      "chose": chose, "random_draw": draw,
                      "vf": rules.value_fraction(h),

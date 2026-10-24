@@ -14,6 +14,7 @@ Nothing here may speak about a real model until the estimator reproduces known
 answers from simulated responders. Fire 331.
 """
 import random
+from fractions import Fraction
 
 TWO128 = 2 ** 128
 
@@ -111,3 +112,77 @@ def bucket5_identifiers(n, q, seed):
         raise AssertionError("duplicate identifier in bucket5 set")
     rng.shuffle(out)
     return out
+
+
+LADDER_PLAN = ((1, 4), (2, 4), (3, 4), (4, 4), (5, 2), (6, 2))
+"""ARM 5's shape: (prefix depth j, identifiers per side). Above-q and below-q get
+the same count at each depth, so n = 2 * sum(per) = 40."""
+
+
+def ladder_identifiers(q, seed, plan=LADDER_PLAN):
+    """ARM 5 (Amendment 8, fire 362). A PRECISION LADDER: read off how many hex
+    digits of the identifier the model actually resolves, in one arm.
+
+    q must be 1/3, whose hex expansion is 0.5555... repeating. An identifier of
+    the form ('5' * j) + d + tail then has an exact, checkable property:
+
+        every truncation to K <= j digits reads 0x0.55..5 (K fives), which is
+        BELOW 1/3 -- so a model resolving K <= j digits participates;
+        the truncation to j+1 digits reads 0x0.55..5d, which for d >= 6 is ABOVE
+        1/3 -- so a model resolving K >= j+1 digits does not.
+
+    So one identifier per depth j separates "resolves <= j digits" from "resolves
+    >= j+1". Walking j up the ladder reads the resolution depth directly, instead
+    of testing one depth at a time the way arm 4 did (where only 2 rows could tell
+    2 digits from 3, and 2 rows is p = 0.5).
+
+    d <= 4 gives the matched BELOW-q control at the same depth: the full value and
+    every truncation all say participate, so an abstention there is the model
+    declining to play on conspicuous identifiers rather than applying any rule.
+    Without those rows a flat "never participate" would read as infinite precision.
+
+    Returns (ids, meta) where meta[h] = (j, side) and side is 'above' or 'below'.
+    REFUSES rather than returning a set whose arithmetic does not hold.
+    """
+    if abs(float(q) - 1 / 3) > 1e-12:
+        raise ValueError("the ladder's prefix arithmetic is specific to q = 1/3")
+    q = Fraction(1, 3)   # exact from here on; the caller may hand us a float
+    rng = random.Random(seed)
+    ids, meta = [], {}
+    for j, per in plan:
+        for side, digits in (("above", "6789abcdef"), ("below", "01234")):
+            # residue balanced within every (depth, side) cell, so a residue
+            # effect cannot be read as a precision step
+            want = {True: per // 2, False: per - per // 2}
+            got = {True: 0, False: 0}
+            tries = 0
+            while got[True] < want[True] or got[False] < want[False]:
+                tries += 1
+                if tries > 2_000_000:
+                    raise RuntimeError(f"could not fill ladder cell j={j} {side}")
+                tail = "".join(rng.choice("0123456789abcdef") for _ in range(32 - j - 1))
+                h = "5" * j + rng.choice(digits) + tail
+                r = residue_predicts(h, q)
+                if got[r] >= want[r] or h in meta:
+                    continue
+                # --- the arithmetic, asserted and not reasoned about
+                above = side == "above"
+                if threshold_predicts(h, q) == above:
+                    raise AssertionError(f"full-value rule wrong side: {h} ({side})")
+                for K in range(1, j + 1):
+                    if Fraction(int(h[:K], 16), 16 ** K) >= q:
+                        raise AssertionError(f"truncation K={K} not below q: {h}")
+                tj = Fraction(int(h[: j + 1], 16), 16 ** (j + 1)) < q
+                if tj == above:
+                    raise AssertionError(f"truncation K={j+1} wrong side: {h}")
+                meta[h] = (j, side)
+                got[r] += 1
+                ids.append(h)
+    n = 2 * sum(per for _, per in plan)
+    if len(ids) != n or len(set(ids)) != n:
+        raise AssertionError(f"ladder built {len(ids)} ids, expected {n} distinct")
+    if n % 4:
+        raise AssertionError("n must be divisible by 4 for the stratum map")
+    order = list(range(n))
+    rng.shuffle(order)
+    return [ids[i] for i in order], meta

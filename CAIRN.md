@@ -401,3 +401,132 @@ before you discard a partial result.** Here, two of four did not. The other two
 G7/G10. Arm 3 stays deferred behind it: arm 3 tests the **rate**, and arm 2
 demonstrated that the rate cannot identify the mechanism (arm 1 and arm 2 differ
 by 0.015 in rate and are opposite in mechanism).
+
+---
+
+## Fire 362, 24 Oct 2026 — arm 4 CLOSED, and the precision question it opens
+
+The Gemini free window reopened at 11:59 PM MST and the three missing rows went
+out in the first minutes of the day. **Arm 4 is complete: 32/32, 0 transport
+errors, every identifier with leading hex digit 5.**
+
+    rate 0.5312   E_threshold +0.9375   (16/16 vs 1/16)   Fisher two-sided 5.66e-08
+    strata +1.000 / +1.000 / +0.750 / +1.000       E_residue -0.0625
+
+**G7 satisfied.** Both single-hex-digit accounts are dead by the registered rate
+test: the bucket's leading digit is constant at 5, so "digit <= 4" predicts a rate
+near 0 and "digit <= 5" predicts near 1, and 0.5312 is neither.
+
+`arm4_completions.py` had already proved the verdict could not depend on the three
+missing rows — all 8 completions gave G7 — so the only thing those calls bought
+was the balanced strata and the exact p. Worth noting that a script written to
+reason about a partial state **refuses** once the state completes (its assertion
+that the missing rows all sit in one cell now fails with an empty set). That is
+the right failure: it will not silently answer a question that no longer exists.
+
+### Ruler 19 — the one error is not at the boundary, for the third time, on an arm that is ALL boundary
+
+Every row in arm 4 sits within 0.037 of q, and the two rows nearest the cut differ
+from each other by 0.0026 in value fraction — a difference that first appears in
+the **fourth** hex digit — and the model got both right. The single error sits at
+**rank 22 of 32** by closeness to q. Ruler 17 predicted boundary clustering in arm
+2 and it was flat; arm 4 is the strongest possible version of that test and it is
+flat again. Stop predicting boundary fuzz.
+
+### The hole G7 does NOT close, and the instrument for it — `precision.py`
+
+"Threshold established" says nothing about **precision**, and precision is the
+whole of the audit question put to Ezaki on 22 Oct: a rule reading 4 bits of an
+identifier and one reading 128 have different attack surfaces. `precision.py`
+scores every K-digit-truncated account and — the half that matters — reports **how
+many rows can tell K-truncation apart from the full value at all.**
+
+    K     fits    discriminating rows   sided with trunc-K   p two-sided
+    1    17/32          16                    1/16             5.2e-04
+    2    29/32           2                    0/2              0.50
+    >=3  31/32           0                     --               --
+
+**Two hex digits decisively, nothing past them.** A fit of 31/32 at K = 8 is not
+evidence of eight digits; it is evidence that no row in the arm distinguishes
+eight from three. The script prints the powered depths and names K >= 3 UNTESTED
+rather than letting the fit column be read as a result.
+
+It also caught my own arithmetic before anything was printed: I asserted the
+two-sided binomial at 0 of 2 was 0.25. It is **0.50** — the symmetric tail "2 of
+2" is just as extreme. The selftest held; the expectation was wrong.
+
+And a correction to the record: there are **two** single-digit accounts, not one.
+"d1 <= 4" ("5 is not below 1/3") and "d1 <= 5" (the exact 1-digit truncation,
+since 5/16 = 0.3125 < 1/3). On arm 2 they are separated from the full-value rule
+by **3** rows and **1** row respectively. The letter's phrase "four identifiers
+separate those two accounts" was about the four rows separating the two accounts
+**from each other**, which is what `arm2_report.py` computes and is correct as
+written — but it reads as though four rows separate threshold from a digit rule,
+and they do not. Say which pair, always.
+
+## Arm 5 — the precision ladder (Amendment 8), registered then half-collected
+
+`rules.ladder_identifiers`. q = 1/3 is `0x0.5555…`, so `('5'*j) + d + tail` makes
+every truncation to K <= j read **below** 1/3 while the truncation to j+1 reads
+**above** it for d >= 6. One identifier per depth reads the resolution off
+directly. n = 40, six depths, matched below-q controls at d <= 4, residue balanced
+in every (depth, side) cell. Verified independently of the builder's own
+assertions: 0 mismatches over 40 rows x 32 depths. The j = 6 above-q rows sit
+**5e-9** from 1/3 — seven correct hex digits.
+
+**Collected 16 of 40; the day closed. ZERO of twelve cells are complete, so
+`ladder_score.py` reports NO depth.** That is Amendment 8's partial-arm clause
+doing its job, and it was written before the data existed precisely so this
+moment would not be a judgement call. The partial pattern is suggestive and is
+deliberately not a number anywhere in this repo.
+
+### Ruler 20 — shuffling is right for drift and wrong for a per-cell reading
+
+The identifier order is shuffled, which is correct when the reading is a pooled
+effect: a quota cut then takes a random subset rather than a contiguous block, so
+nothing correlates with collection time. **But arm 5's reading is per-cell**, and
+a random 40% of rows leaves every cell partial and no cell complete. Collecting
+in depth order would have closed six cells. I am NOT reordering it — the order is
+seeded, deterministic, and I would be choosing it after seeing which rows landed.
+The lesson is for the NEXT ladder-shaped arm: **if the decision rule reads cells,
+collect by cell.**
+
+### Ruler 21 — a comment asserted the evidence was kept, over code that threw it away, for five fires
+
+`call()`'s own comment said the thinking traces "are kept whole rather than
+truncated" because Gemini exposes them. **`includeThoughts` was never set.** Every
+arm since fire 331 stored only the JSON answer. Found only because Amendment 8
+registered a caveat that *required* reading the traces — the promise is what
+exposed the gap. A comment is a ruler too, and this one lied longer than any
+instrument in this file.
+
+**And a second bug was hiding the first.** `call()` concatenated every response
+part into one string, so a thought part would have reached `parse()` ahead of the
+answer. `parse()` reads the LAST JSON object and survives that — **except** on a
+MAX_TOKENS run with no answer part, where a deliberation's own rejected candidate
+scores as the row. Measured: `parse('Maybe {"action":"B"}. Actually no…')` returns
+**0**, a fabricated answer; with the parts separated it returns **None**. Ruler 1
+of this cairn records that MAX_TOKENS case returning `None` — it did so only
+because the traces were absent. **Fixing either bug alone starts silently
+inventing rows.** The separation is fixed unconditionally; `--traces` exists and
+is OFF by default, because arm 5 is registered and mid-collection and the
+instrument does not change inside a measurement.
+
+Amendment 8's limitation 1 is **withdrawn for arm 5** in the registration file,
+with the reason, rather than left standing as a promise the code cannot keep.
+
+### The next fire, exactly
+
+1. **The window reopens 11:59 PM MST** (`reset_utc` 2026-10-25T06:59:59Z in
+   `quota_state.json`). `GEM_MODEL=gemini-3.5-flash python3 run_gemini.py --when`
+   first, always.
+2. `GEM_MODEL=gemini-3.5-flash python3 run_gemini.py --q 1/3 --n 40 --thinking
+   --ladder --seed 362 --sleep 1.2 --out answers35_q3_think_ladder.json --resume`
+   — **never `--force`, never `--traces` on this arm, never a different `--n`
+   (the runner refuses a changed n, which is the registration defending itself).**
+   ~16-20 rows per day, so two more days.
+3. Then `python3 ladder_score.py`. It reports a depth only when cells are
+   complete and refuses on a failed anchor or a non-monotone ladder. Do not
+   hand-score it.
+4. `python3 precision.py` on the finished ladder as well — it will have real
+   discriminating power at every depth through 6, which arm 4 does not.
