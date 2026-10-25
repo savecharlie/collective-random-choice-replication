@@ -1,3 +1,226 @@
+# Results — ARM 4 CLOSED AT 32/32; ARM 5 IS AT 34/40 AND STILL UNSCORABLE (25 Oct 2026, fire 368). Read this section first; everything below it is kept unedited.
+
+## ARM 4, CLOSED: the leading-digit accounts are dead and the threshold account is ESTABLISHED
+
+**`gemini-3.5-flash`, reasoning ON, q = 1/3, 32 of 32 designed, 32 parsed, 0 transport
+errors.** Every identifier in this arm has **leading hex digit `5`** — value fraction in
+[0.3125, 0.375) — so the leading digit is **constant across the arm and has no variance to
+have an effect with.** That is the whole design: an account that reads the leading digit
+cannot produce any contrast here, and the threshold account can.
+
+| | n | participated | rate |
+|---|---|---|---|
+| threshold-yes (vf < 1/3) | 16 | **16** | 1.0000 |
+| threshold-no (vf >= 1/3) | 16 | **1** | 0.0625 |
+| **E_threshold** | | | **+0.9375** |
+| residue-yes (value mod 3 == 0) | 16 | 8 | 0.5000 |
+| residue-no | 16 | 9 | 0.5625 |
+| **E_residue** | | | **−0.0625** |
+| overall rate | 32 | 17 | 0.5312 |
+
+Null for the statistic actually compared (`big = max(|E_thr|, |E_res|)`) at n = 32,
+rate 0.53, 20,000 draws: **95th = 0.375, 99th = 0.500.** Observed 0.938 is the 100th
+percentile of its own null. Fisher exact, two-sided: **p = 5.66e-08.**
+
+### The design is now exactly balanced, which is what the three missing rows were costing
+All four cells hold **8 identifiers each**:
+
+| threshold | residue | n | participated |
+|---|---|---|---|
+| no | no | 8 | 1 |
+| no | yes | 8 | 0 |
+| yes | no | 8 | 8 |
+| yes | yes | 8 | 8 |
+
+At 29 of 32 the residue balance was broken 8-vs-5 inside the threshold-yes half, and the
+fire-359 section below says the one thing that would change on completion is that
+**E_residue becomes reportable on a balanced set.** It is now reportable, and it is a null:
+**−0.0625 at 8/8 in both threshold halves.** The divisibility rule — the *second* of the two
+rules Ezaki et al. report — does nothing on this model at this target rate once the
+threshold rule is held fixed.
+
+### The fire-359 bound was right, and the way it was right is the part worth keeping
+That section predicted the verdict from three never-collected rows by enumerating all 2³
+completions and showing every one gave G7. The rows came in as "3 of 3 participated", which
+is the last line of that table: rate 0.5312, E_thr 0.9375, G7. **A bound held against the
+data rather than a hope that got lucky** — and the enumeration is still in
+`arm4_completions.py`, which asserts the short cells really are one cell from the data and
+exits non-zero if completions ever split across gates.
+
+### Two checks on the arm itself, re-run at 32
+1. **Labels recomputed from the raw hex: 32/32 rows, 0 mislabeled.** `threshold` and `vf`
+   re-derived as `int(id, 16) / 2**128 < 1/3`, agreeing with the stored fields to 1e-12. The
+   stratum labels are not taken on trust from the collector that wrote them.
+2. **The two identifiers nearest the boundary are 2.6e-3 apart in value fraction, lie on
+   opposite sides of 1/3, and are both classified correctly.** `55289746...` at
+   vf = 0.332650618 (−6.8e-4 from q) participated; `55d11ae1...` at vf = 0.335221939
+   (+1.9e-3 from q) did not. Same leading digit, same second digit. Whatever the model is
+   doing, it resolves 1/3 to a few parts in a thousand.
+
+### Scored against Amendment 7, registered before any arm-4 call was spent
+- **G7 PASSES.** Rate 0.5312 inside [0.30, 0.70] **and** E_threshold 0.9375 > 0.28 — both
+  conditions, as the rule requires. **The threshold account is established over both
+  leading-digit accounts.**
+- **G8 is dead** (needs rate < 0.15). A digit rule cutting at 4 would have participated on
+  none of these.
+- **G9 is dead** (needs rate > 0.85). A digit rule cutting at 5 would have participated on
+  all of these.
+- **G10 is not it.** It needs E_threshold <= 0.28 against an observed 0.9375.
+
+### What this does and does not say
+The prompt never mentions a threshold, a value fraction, or `2**128`. It asks each agent to
+choose one of two options so that the group's participating fraction `f` minimizes
+`(f − 1/3)**2`, with no communication and no observation of the others. **With reasoning on,
+the model uses its own identifier as a shared-randomness device and participates iff its
+value fraction falls below q** — an emergent correlated strategy, not an instructed one.
+Arm 4 pins the statistic to the value fraction and rules out the cheaper story (a
+leading-digit heuristic that happens to align with it) by holding that digit fixed.
+
+**Arm 4 can kill a digit account and cannot measure one** — inside the bucket the digit is
+constant, which is the point of the bucket and also its one blind spot. Declared in
+Amendment 7 before collection; it still stands.
+
+**AND "ESTABLISHED" IS NOT "ESTABLISHED AT WHAT PRECISION."** `precision.py` reports, beside
+each K-digit-truncated account's fit, how many identifiers can tell it apart from the full
+128-bit comparison at all: **16 rows at K = 1 (1/16 sided with it, p = 5.2e-04), 2 rows at
+K = 2, and zero rows at K >= 3.** The arm establishes **two hex digits** and has no power
+past them. The 31/32 fit at K = 8 is one number reported six times. That is what arm 5 is
+for.
+
+## ARM 5 (the precision ladder, Amendment 8): 34 of 40, 7 of 12 cells complete, NO DEPTH MAY BE REPORTED
+
+`ladder_score.py` owns this file and `analyse.py` **refuses** it by name — Amendment 8 scores
+per-depth *cells*, and a pooled E_threshold across the ladder invites exactly the reading the
+registration forbids. Current state, read off the data:
+
+| cell | collected / planned | participated | complete |
+|---|---|---|---|
+| j=1 above q | 3 / 4 | 0 / 3 | no |
+| j=1 below q | 4 / 4 | 4 / 4 | yes |
+| j=2 above q | 4 / 4 | 0 / 4 | yes |
+| j=2 below q | 4 / 4 | 3 / 4 | yes |
+| j=3 above q | 4 / 4 | 1 / 4 | yes |
+| j=3 below q | 2 / 4 | 2 / 2 | no |
+| j=4 above q | 3 / 4 | 0 / 3 | no |
+| j=4 below q | 4 / 4 | 4 / 4 | yes |
+| j=5 above q | 1 / 2 | 0 / 1 | no |
+| j=5 below q | 2 / 2 | 1 / 2 | yes |
+| j=6 above q | 1 / 2 | 0 / 1 | no |
+| j=6 below q | 2 / 2 | 2 / 2 | yes |
+
+- **G12, the anchor cell (j=1 above q), is INCOMPLETE at 3/4. Under the registered rule
+  that alone forbids naming any depth,** whatever the other cells look like.
+- **G13, the control floor, is OK:** below-q participation 14/16 = 0.88.
+- **G11 cannot be evaluated** — it needs every above-q cell, and three of six are short.
+
+**Do not read the above-q column as an answer.** It is suggestive in the direction the arm
+was built to test and it is also 0, 0, 1, 0, 0, 0 out of cells with n = 1 to 4, which is a
+sample size at which suggestive is free. **Six rows are missing**, held up by a free-tier
+quota, and the gate stays shut until they are in. You can see the state for yourself:
+
+```
+python3 ladder_score.py     # prints the cell table and declines to name a depth
+python3 precision.py        # how many rows can tell a K-digit account from the full one
+```
+
+### What is still open
+- **The last 6 ladder rows.** Then `ladder_score.py` may or may not name a depth — which
+  is the point of writing the gate down before collecting.
+- Arm 3 (`--thinking --random-draw`) stays **deferred**, and arms 2 and 4 together are the
+  reason: the rate cannot identify the mechanism, and the mechanism is now identified
+  without it.
+- The **Claude arm (P1–P5) is unfunded.** It is the only remaining test of whether this is
+  one model's habit or a property of reasoning models, and that sentence belongs on any
+  write-up of this work, including this one.
+
+---
+
+# Results — ARM 4 AT 29/32 (23 Oct 2026, fire 359). Superseded by the closed arm above; kept unedited.
+
+## ARM 4: the leading-digit accounts are dead, and the threshold account is ESTABLISHED
+
+**`gemini-3.5-flash`, reasoning ON, q = 1/3, 29 parsed of 32 designed.** Every identifier
+in this arm has **leading hex digit `5`** — value fraction in [0.3125, 0.375) — so the
+leading digit is **constant across the arm and has no variance to have an effect with.**
+That is the whole design: an account that reads the leading digit cannot produce any
+contrast here, and the threshold account can.
+
+| | n | participated | rate |
+|---|---|---|---|
+| threshold-yes (vf < 1/3) | 13 | **13** | 1.0000 |
+| threshold-no (vf >= 1/3) | 16 | **1** | 0.0625 |
+| **E_threshold** | | | **+0.9375** |
+| E_residue | 16 vs 13 | | +0.0385 |
+| overall rate | 29 | 14 | 0.4828 |
+
+Null for the statistic actually compared (`big = max(|E_thr|, |E_res|)`) at n = 29,
+rate 0.48, 20,000 draws: **95th = 0.390, 99th = 0.514.** Observed 0.938 is the 100th
+percentile of its own null.
+
+### Scored against Amendment 7, which was registered before any arm-4 call was spent
+- **G7 PASSES.** Rate 0.4828 is inside [0.30, 0.70] **and** E_threshold 0.9375 > 0.28.
+  Both conditions, as the rule requires. **The threshold account is established over
+  both leading-digit accounts.**
+- **G8 is dead** (needs rate < 0.15; observed 0.4828). A digit rule cutting at 4 would
+  have participated on none of these.
+- **G9 is dead** (needs rate > 0.85). A digit rule cutting at 5 would have participated
+  on all of these.
+- **G10 is not it.** It needs E_threshold <= 0.28 against an observed 0.9375.
+
+### THE ARM IS INCOMPLETE AND THE VERDICT IS INVARIANT ANYWAY — this is the part to check
+Three rows are missing (two never sent, one returned `finish=QUOTA` mid-response and did
+not parse) and **all three are in the same cell**, `threshold=True, residue=False`: 5
+collected where the design asks for 8. Because every missing row is threshold-**yes**, any
+of them can only raise or leave the threshold-yes rate, so the worst case for the gate is
+"all three refuse". `arm4_completions.py` enumerates all 2**3 = 8 completions:
+
+| added participations | rate | E_thr | verdict |
+|---|---|---|---|
+| 0 of 3 | 0.4375 | 0.7500 | G7 |
+| 1 of 3 | 0.4688 | 0.8125 | G7 |
+| 2 of 3 | 0.5000 | 0.8750 | G7 |
+| 3 of 3 | 0.5312 | 0.9375 | G7 |
+
+**All eight completions give G7.** The verdict does not depend on the rows that were never
+collected, and that is a bound rather than a hope. `arm4_completions.py` asserts from the
+data — not from its own docstring — that the short cells really are all one cell, and exits
+non-zero if the completions ever split across gates.
+
+### Two checks on the arm itself
+1. **Labels recomputed from the raw hex: 29/29 rows, 0 mislabeled.** `threshold` and `vf`
+   were re-derived as `int(id, 16) / 2**128 < 1/3` and agree with the stored fields to
+   1e-12. The stratum labels are not taken on trust from the collector that wrote them.
+2. **The two identifiers nearest the boundary are 2.6e-3 apart in value fraction, lie on
+   opposite sides of 1/3, and are both classified correctly.** `55289746...` at
+   vf = 0.332650618 (−6.8e-4 from q) participated; `55d11ae1...` at
+   vf = 0.335221939 (+1.9e-3 from q) did not. Same leading digit, same second
+   digit. Whatever the model is doing, it resolves 1/3 to a few parts in a thousand.
+
+### What this does and does not say
+The prompt never mentions a threshold, a value fraction, or `2**128`. It asks each agent to
+choose one of two options so that the group's participating fraction `f` minimizes
+`(f − 1/3)**2`, with no communication and no observation of the others. **With reasoning on,
+the model uses its own identifier as a shared-randomness device and participates iff its
+value fraction falls below q** — an emergent correlated strategy, not an instructed one.
+Arm 4 pins the statistic it uses to the value fraction and rules out the cheaper story
+(a leading-digit heuristic that happens to align with it) by holding that digit fixed.
+
+**Arm 4 can kill a digit account and cannot measure one** — inside the bucket the digit is
+constant, which is the point of the bucket and also its one blind spot. That was declared
+in Amendment 7 before collection, and it still stands. **E_residue is reported here with a
+caveat the registration did not anticipate:** the bucket balances residue 8/8 *within each
+threshold half*, and at 29 of 32 that balance is broken in the threshold-yes half (8 vs 5).
+E_residue = +0.0385 is a null either way, but it is a null on an unbalanced set.
+
+### What the next fire does
+- **Collect the last 3 rows** when the free tier reopens (`--when` first, `--resume`, never
+  `--force`, never a smaller n). The verdict will not change; the balanced E_residue will
+  become reportable.
+- Arm 3 (`--thinking --random-draw`) is still **deferred**, and arm 2 plus arm 4 together
+  are the reason: the rate cannot identify the mechanism, and the mechanism is now identified
+  without it.
+- The **Claude arm (P1–P5) still needs API credit.** It is the only remaining test of whether
+  this is one model's habit or a property of reasoning models.
 # Results — ARM 2 IS COLLECTED AND IT IS THE MAIN TEST (22 Oct 2026). Read this section first; the history below it is kept unedited.
 
 ## ARM 2, COMPLETE: 64 of 64 on `gemini-3.5-flash`, **reasoning ON**, q = 1/3

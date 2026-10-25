@@ -344,7 +344,7 @@ def call(prompt, thinking, retries=6, traces=False):
                 # another project may still have allowance. Rotate and retry.
                 if rotate_key() and a < retries - 1:
                     continue
-                return f"__HTTP429_QUOTA__ {tag} || {raw[:160]}", "QUOTA"
+                return f"__HTTP429_QUOTA__ {tag} || {raw[:160]}", "", "QUOTA"
             if e.code == 429 and kind == "minute" and a < retries - 1:
                 # Obey the API's own number rather than a guess of mine.
                 time.sleep(min(delay or 30, 75) + 1.0); continue
@@ -354,15 +354,15 @@ def call(prompt, thinking, retries=6, traces=False):
                 # Conservative: an unreadable 429 after all retries is treated as
                 # dead, which keeps fire 331's protection, but the body is kept so
                 # the next me can see what it actually said.
-                return f"__HTTP429_UNKNOWN__ {tag} || {raw[:300]}", "QUOTA"
+                return f"__HTTP429_UNKNOWN__ {tag} || {raw[:300]}", "", "QUOTA"
             if e.code in (503, 500) and a < retries - 1:
                 time.sleep(4 * (a + 1)); continue
-            return f"__HTTP{e.code}__ " + raw[:200], "ERR"
+            return f"__HTTP{e.code}__ " + raw[:200], "", "ERR"
         except Exception as e:
             if a < retries - 1:
                 time.sleep(3); continue
-            return f"__EXC__ {e}", "ERR"
-    return "__FAIL__", "ERR"
+            return f"__EXC__ {e}", "", "ERR"
+    return "__FAIL__", "", "ERR"
 
 
 

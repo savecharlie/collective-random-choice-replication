@@ -111,7 +111,7 @@ Same effect size, same figures, very different thing to defend against.
 
 ---
 
-## The discriminating design (arm 4) — running, partial, honest
+## The discriminating design (arm 4) — closed
 
 Registered as Amendment 7 in `PREREGISTRATION.md` **before any call was
 spent**: 32 identifiers whose **first hex digit is 5**, sixteen below *q* and
@@ -138,6 +138,22 @@ alone** separates them:
 Both *single-character* accounts are dead on the rate alone: one predicts ≈ 0 in
 this bucket and the other ≈ 1, and 0.53 is neither.
 
+The completion also makes the **divisibility** rule — the second of the two rules
+Ezaki et al. report — testable on a fully balanced design, because all four
+cells now hold exactly eight identifiers:
+
+| threshold | value mod 3 == 0 | n | participated |
+|---|---|---|---|
+| no | no | 8 | 1 |
+| no | yes | 8 | 0 |
+| yes | no | 8 | 8 |
+| yes | yes | 8 | 8 |
+
+**E_residue = −0.0625**, a null, on 8/8 within each threshold half. At 29 of 32
+that balance was broken 8-vs-5 and the number was a null on an unbalanced set;
+it is now a null on a balanced one. On this model at this target rate, once the
+threshold rule is held fixed, divisibility does nothing.
+
 **And "established" is not "established at what precision."** `precision.py`
 reports, beside each K-digit-truncated account's fit, how many identifiers can
 tell it apart from the full 128-bit comparison at all: **16 rows at K = 1
@@ -146,10 +162,16 @@ So the arm establishes **two hex digits** and has no power past them. The 31/32
 fit at K = 8 is one number reported six times.
 
 The arm that settles the digit count — **arm 5, the precision ladder** — is
-registered as Amendment 8 and is **half collected. No number for it appears in
-this repository**, because its registered rule reads per-depth cells and none of
-the twelve is complete. `analyse.py` refuses to score the file; `ladder_score.py`
-reports no depth. See RESULTS.md §8.
+registered as Amendment 8 and is at **34 of 40, with 7 of its 12 cells
+complete.** Its registered rule scores per-depth cells, so **no depth is named
+here and none will be until the cells close.** In particular the anchor cell
+(G12, j = 1 above *q*) stands at 3 of 4, and Amendment 8 says that alone forbids
+reporting a depth. `analyse.py` refuses the file by name; `ladder_score.py`
+prints the cell table and declines to name a depth. The per-cell counts are in
+RESULTS.md, in the arm-5 section, so you can see exactly what is and is not
+there — the above-*q* column is suggestive in the direction the arm was built to
+test and is also drawn from cells of size one to four, which is a sample size at
+which suggestive is free.
 
 
 ## A prediction of mine that failed, kept because it failed
@@ -176,7 +198,7 @@ Re-collecting needs `~/.gemini_api_key` and `run_gemini.py`.
 answers35_q3_nothink.json          arm 1, reasoning off,  64/64
 answers35_q3_think.json            arm 2, reasoning on,   64/64
 answers35_q3_think_bucket5.json    arm 4, first-digit-5,  32/32  CLOSED
-answers35_q3_think_ladder.json     arm 5, precision ladder, 16/40  PARTIAL, unscored
+answers35_q3_think_ladder.json     arm 5, precision ladder, 34/40  PARTIAL, unscored
 ```
 
 Every answer row carries the identifier, the stratum, the raw model output and
@@ -189,8 +211,10 @@ the parse. API-key fingerprints are redacted; nothing else is touched.
   is unfunded.
 - **Not a faithfulness claim.** I never treat a reasoning summary as an account
   of the computation. Where I quote one it is as a hypothesis generator.
-- **Arm 4 is half collected.** Two accounts are dead on the rate; the one that
-  matters most is open.
+- **Arm 4 is closed; arm 5 is not.** Both single-character accounts are dead,
+  and the arm has power to two hex digits and none past them. How many digits the
+  model actually reads is open, and the arm built to answer it is six rows short
+  of being scorable.
 
 ## Files
 
