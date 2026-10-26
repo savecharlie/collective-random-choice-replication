@@ -5,7 +5,7 @@ STRATA: the labels X and Y are A and B in either assignment, and the two option 
 appear in either order. Without that, an "always answer A" bias would masquerade as a
 rule. Fire 331.
 """
-import collections, datetime, json, random, re, sys, time, urllib.request, urllib.error, os
+import collections, datetime, json, random, re, socket, sys, time, urllib.request, urllib.error, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rules
 
@@ -53,25 +53,58 @@ def _url(key):
             f":generateContent?key={key}")
 
 
-def probe_key(key, timeout=30, label=None):
-    """2-token call. Returns ("ok"|"day"|"minute"|"unknown"|"err", detail)."""
+# RULER 22 (fire 369) -- A SOCKET TIMEOUT IS NOT AN EMPTY QUOTA, AND THE RUNNER
+# SAID IT WAS.  Measured: at 2026-10-26T07:04Z, four minutes after the day window
+# reopened, the single probe raised "The read operation timed out", probe_key
+# returned ("err", ...), select_key read that as "this key has no quota", and the
+# program exited with "NO KEY HAS QUOTA -- every candidate project is
+# daily-exhausted."  Nothing was exhausted: plain GETs to
+# generativelanguage.googleapis.com, google.com and arxiv.org all answered in
+# under 0.4 s in the same minute.  A believed verdict would have cost the whole
+# open window -- 24 h of a 6-row-remaining arm -- on the evidence of one dropped
+# TCP read.  So: transport failures get their OWN status ("unreachable"), they are
+# RETRIED, and the exit refuses to name a cause the probes did not establish.
+def _transient(exc):
+    """True if exc is a transport condition that says nothing about quota."""
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in (408, 500, 502, 503, 504)
+    return isinstance(exc, (socket.timeout, TimeoutError, ConnectionError,
+                            urllib.error.URLError, OSError))
+
+
+def probe_key(key, timeout=30, label=None, tries=3, sleep=2.0):
+    """2-token call. Returns ("ok"|"day"|"minute"|"unknown"|"unreachable"|"err", detail).
+
+    "unreachable" means the probe never reached a verdict -- retried `tries`
+    times first -- and must NEVER be read as a quota answer.
+    """
     body = json.dumps({"contents": [{"parts": [{"text": "hi"}]}],
                        "generationConfig": {"maxOutputTokens": 2}}).encode()
-    try:
-        req = urllib.request.Request(_url(key), data=body,
-                                     headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=timeout):
-            return "ok", ""
-    except urllib.error.HTTPError as e:
-        full = e.read().decode(errors="replace")
-        if e.code == 429:
-            kind, delay = classify_429(full)
-            if kind == "day" and label is not None:
-                note_day_exhausted(label, delay, full)
-            return kind, f"{quota_ids(full)} delay={delay}"
-        return "err", f"HTTP{e.code} {full[:120]}"
-    except Exception as e:
-        return "err", str(e)[:120]
+    last = ("unreachable", "no attempt")
+    for attempt in range(1, tries + 1):
+        try:
+            req = urllib.request.Request(_url(key), data=body,
+                                         headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=timeout):
+                return "ok", ""
+        except urllib.error.HTTPError as e:
+            full = e.read().decode(errors="replace")
+            if e.code == 429:
+                kind, delay = classify_429(full)
+                if kind == "day" and label is not None:
+                    note_day_exhausted(label, delay, full)
+                return kind, f"{quota_ids(full)} delay={delay}"
+            if not _transient(e):
+                return "err", f"HTTP{e.code} {full[:120]}"
+            last = ("unreachable", f"HTTP{e.code} attempt {attempt}/{tries}")
+        except Exception as e:
+            if not _transient(e):
+                return "err", str(e)[:120]
+            last = ("unreachable", f"{type(e).__name__}: {str(e)[:80]} "
+                                   f"attempt {attempt}/{tries}")
+        if attempt < tries:
+            time.sleep(sleep * attempt)
+    return last
 
 
 # ---------------------------------------------------------------------------
@@ -163,11 +196,20 @@ API_KEY = KEYS[0][1] if KEYS else ""
 URL = _url(API_KEY)
 
 
+PROBE_VERDICTS = []   # [(label, status, detail)] from the last select_key()
+
+
 def select_key(verbose=True):
-    """Probe candidates in order; adopt the first with quota. Returns its label."""
-    global KEY_IDX, API_KEY, URL
+    """Probe candidates in order; adopt the first with quota. Returns its label.
+
+    Also records every probe's verdict in PROBE_VERDICTS, so a caller that gets
+    None can say WHICH stuck it is instead of asserting the likelier one.
+    """
+    global KEY_IDX, API_KEY, URL, PROBE_VERDICTS
+    PROBE_VERDICTS = []
     for i, (label, k) in enumerate(KEYS):
         st, detail = probe_key(k, label=label)
+        PROBE_VERDICTS.append((label, st, detail))
         if verbose:
             print(f"  key {label} {_fp(k)} -> {st} {detail}", flush=True)
         if st in ("ok", "minute"):      # minute = has daily allowance, just busy
@@ -175,6 +217,28 @@ def select_key(verbose=True):
             URL = _url(k)
             return label
     return None
+
+
+def stuck_message(verdicts):
+    """Name the stuck the probes ACTUALLY established. Two different stucks:
+    exhaustion (wait for the window) and unreachability (retry now)."""
+    if not verdicts:
+        return ("NO KEY TO PROBE -- no candidate key file exists. Not collecting. "
+                "This is a stuck, and it is reportable as one.")
+    kinds = [st for _, st, _ in verdicts]
+    detail = "; ".join(f"{l}={st}" for l, st, _ in verdicts)
+    if all(k == "day" for k in kinds):
+        return ("NO KEY HAS QUOTA -- every candidate project is daily-exhausted. "
+                f"Not collecting. ({detail}) This is a stuck, and it is reportable "
+                "as one.")
+    if any(k == "unreachable" for k in kinds):
+        return ("COULD NOT REACH THE API -- no probe returned a quota verdict after "
+                f"retries ({detail}). This is NOT evidence of exhaustion: a dropped "
+                "read says nothing about the day window. Check the network and run "
+                "the same command again; `--when` reports the window on record.")
+    return ("NO KEY USABLE -- no probe reported quota, and not all of them were "
+            f"quota answers ({detail}). Not collecting. Read the statuses above "
+            "before concluding anything about the window.")
 
 
 def adopt_first_key():
@@ -681,6 +745,82 @@ def _selftest():
             globals()["MODEL"] = real_model
     finally:
         QSTATE, KEYS = real_qstate, real_keys
+
+    # ---- RULER 22 (fire 369): a dropped read is not an empty quota -----------
+    # Every check below is RED on the fire-368 build. The one that matters most
+    # is "timeout then 200 -> ok": the retry is what saves an open window.
+    import io
+    real_urlopen = urllib.request.urlopen
+    real_qstate2 = QSTATE
+    QSTATE = os.path.join(tempfile.mkdtemp(), "q.json")
+
+    def _seq(*items):
+        it = iter(items)
+        def f(req, timeout=None):
+            x = next(it, items[-1])
+            if isinstance(x, Exception):
+                raise x
+            class R:
+                def __enter__(s): return s
+                def __exit__(s, *a): return False
+            return R()
+        return f
+
+    def _http(code, body):
+        return urllib.error.HTTPError("u", code, "m", {}, io.BytesIO(body.encode()))
+
+    DAY_BODY = ('{"error":{"details":[{"@type":"type.googleapis.com/google.rpc.'
+                'QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerDay'
+                'PerProjectPerModel-FreeTier"}]},{"@type":"type.googleapis.com/'
+                'google.rpc.RetryInfo","retryDelay":"60775s"}]}}')
+    MIN_BODY = ('{"error":{"details":[{"@type":"type.googleapis.com/google.rpc.'
+                'QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerMinute'
+                'PerProjectPerModel-FreeTier"}]},{"@type":"type.googleapis.com/'
+                'google.rpc.RetryInfo","retryDelay":"46s"}]}}')
+    try:
+        # 20. THE LIVE FAILURE, 2026-10-26T07:04Z: one dropped read, reported as
+        #     "every candidate project is daily-exhausted".
+        urllib.request.urlopen = _seq(socket.timeout("The read operation timed out"))
+        st, d = probe_key("AIzaX", tries=3, sleep=0)
+        chk("dropped read x3 -> 'unreachable', retried (was 'err')",
+            st == "unreachable" and "attempt 3/3" in d)
+        m = stuck_message([("~/.gemini_api_key", "unreachable", "timeout")])
+        chk("unreachable -> the message does NOT claim exhaustion",
+            "COULD NOT REACH" in m and "daily-exhausted" not in m)
+
+        # 21. the retry is the whole point: one dropped read must not cost a window
+        urllib.request.urlopen = _seq(socket.timeout("t"), "ok")
+        chk("dropped read then 200 -> 'ok'",
+            probe_key("AIzaX", tries=3, sleep=0)[0] == "ok")
+
+        # 22. a real daily 429 still reads as exhaustion, with the old message
+        urllib.request.urlopen = _seq(_http(429, DAY_BODY))
+        chk("day-429 -> 'day'", probe_key("AIzaX", tries=3, sleep=0)[0] == "day")
+        chk("all-day verdicts -> 'NO KEY HAS QUOTA'",
+            "NO KEY HAS QUOTA" in stuck_message([("a", "day", ""), ("b", "day", "")]))
+
+        # 23. per-minute 429 is still a usable key
+        urllib.request.urlopen = _seq(_http(429, MIN_BODY))
+        chk("minute-429 -> 'minute'", probe_key("AIzaX", tries=3, sleep=0)[0] == "minute")
+
+        # 24. a bad key is terminal: no retry, and not called unreachable
+        urllib.request.urlopen = _seq(_http(403, '{"error":"API key not valid"}'))
+        st, d = probe_key("AIzaX", tries=3, sleep=0)
+        chk("HTTP403 -> 'err', not retried", st == "err" and d.startswith("HTTP403"))
+        chk("err verdicts -> neither exhaustion nor unreachability claimed",
+            "NO KEY USABLE" in stuck_message([("a", "err", "HTTP403")]))
+
+        # 25. 503 is transport, not a verdict
+        urllib.request.urlopen = _seq(_http(503, "overloaded"))
+        st, d = probe_key("AIzaX", tries=2, sleep=0)
+        chk("HTTP503 -> 'unreachable', retried",
+            st == "unreachable" and "attempt 2/2" in d)
+
+        # 26. no key file at all is its own stuck
+        chk("no candidates -> 'NO KEY TO PROBE'", "NO KEY TO PROBE" in stuck_message([]))
+    finally:
+        urllib.request.urlopen = real_urlopen
+        QSTATE = real_qstate2
     return ok
 
 
@@ -818,8 +958,7 @@ if __name__ == "__main__":
     else:
         sel = select_key()
     if sel is None:
-        sys.exit("NO KEY HAS QUOTA -- every candidate project is daily-exhausted. "
-                 "Not collecting. This is a stuck, and it is reportable as one.")
+        sys.exit(stuck_message(PROBE_VERDICTS))
     print(f"using key {sel} ({_fp(API_KEY)})", flush=True)
     rows, ids = load_prior(outpath, ids, a.resume, a.force)
     if not ids:

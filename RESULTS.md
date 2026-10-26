@@ -1,4 +1,136 @@
-# Results — ARM 4 CLOSED AT 32/32; ARM 5 IS AT 34/40 AND STILL UNSCORABLE (25 Oct 2026, fire 368). Read this section first; everything below it is kept unedited.
+# Results — ARM 5 CLOSED AT 40/40: the model reads AT LEAST SEVEN HEX DIGITS, and the registered decision rule had an inequality backwards (26 Oct 2026, fire 369). Read this section first; everything below it is kept unedited.
+
+## ARM 5, CLOSED: no resolution ceiling at <= 7 hex digits
+
+**`gemini-3.5-flash`, reasoning ON, q = 1/3, 40 of 40 designed, 40 parsed, 0 transport
+errors**, collected across four fires (362, 366, 368, 369). All **12 of 12 cells
+complete** — the first time any cell in this arm has been complete.
+
+Every identifier is `('5' * j) + d + tail`. q = 1/3 is `0x0.5555…`, so truncating such an
+identifier to any `K <= j` hex digits lands **below** q and truncating to `j+1` lands
+**above** it (for d >= 6). One identifier per depth separates "resolves <= j digits" from
+"resolves >= j+1". The `d <= 4` rows are the matched control where the full value *and*
+every truncation say participate.
+
+| depth j | above-q participated | below-q (control) |
+|---|---|---|
+| 1 | 0/4 | 4/4 |
+| 2 | 0/4 | 3/4 |
+| 3 | 1/4 | 4/4 |
+| 4 | 1/4 | 4/4 |
+| 5 | 0/2 | 2/2 |
+| 6 | 0/2 | 2/2 |
+| **pooled** | **2/20 = 0.10** | **18/20 = 0.90** |
+
+**E_threshold = +0.800, Fisher exact two-sided p = 5.30e-07.** G12 anchor: 0.00 (<= 0.25
+required, replicating arm 4's 1/16). G13 control floor: 0.90 (>= 0.70 required).
+
+### The reading: at least 7 hex digits = at least 28 bits
+
+**No above-q cell reaches 0.75 at any depth through j = 6**, and the j = 6 above-q
+identifiers sit **5e-9 from 1/3** — they require seven correct hex digits to get right.
+So: **no resolution ceiling found at <= 7 hex digits.**
+
+`ladder_depth.py` puts a strength on that. For each candidate depth K0 the construction
+fixes what a K0-resolving model must answer on all 40 rows; rows flip at a per-row error
+rate fitted by maximum likelihood. **Validated on all 8 known-depth oracles first (0
+mismatches each) before being pointed at the data:**
+
+| K0 | mismatches | eps-hat | logL | likelihood ratio vs best |
+|---|---|---|---|---|
+| 1 | 20 | 0.500 | −27.726 | 2.5e+06 |
+| 2 | 16 | 0.400 | −26.920 | 1.1e+06 |
+| 3 | 12 | 0.300 | −24.435 | 9.2e+04 |
+| 4 | 10 | 0.250 | −22.493 | 1.3e+04 |
+| 5 | 8 | 0.200 | −20.016 | 1.1e+03 |
+| 6 | 6 | 0.150 | −16.908 | **49.7** |
+| **>= 7** | **4** | **0.100** | **−13.003** | **best** |
+
+So **"deeper than 6" beats "exactly 6" by 50:1 and every shallower depth by >= 1.1e3.**
+7 and 8 are the same hypothesis here: the deepest rung is j = 6, so this arm cannot
+separate "reads 7 digits" from "reads all 32".
+
+`precision.py` agrees independently, and shows the ladder did the job it was designed for
+— arm 4 had 16 discriminating rows at K=1 and **two** at K=2; arm 5 has 20/16/12/8/4/2:
+
+| K | fits | discriminating rows | sided with trunc-K | p two-sided |
+|---|---|---|---|---|
+| 1 | 20/40 | 20 | 2/20 | 4.0e-04 |
+| 2 | 24/40 | 16 | 2/16 | 4.2e-03 |
+| 3 | 28/40 | 12 | 2/12 | 0.039 |
+| 4 | 30/40 | 8 | 1/8 | 0.070 |
+| 5 | 32/40 | 4 | 0/4 | 0.125 |
+| 6 | 34/40 | 2 | 0/2 | 0.50 |
+| >= 7 | 36/40 | **0** | — | — |
+
+**Read both tables together and say it plainly: K <= 3 is excluded cell-by-cell at
+conventional significance; K = 4, 5, 6 are excluded only by the pooled fit, and at K = 6
+the single-cell evidence is 0/2, which is p = 0.50 on its own.** The strength at the deep
+end comes from the monotone consistency of six rungs, not from any one of them.
+
+### The two "shallow-looking" rows carry no depth information, and the control proves it
+
+The only above-q participations are one at j=3 and one at j=4. **The error rate on those
+rows is 2/20 = 0.100, and the error rate on the CONTROL rows — where the full value and
+every truncation agree on participate, so no account predicts otherwise — is also
+2/20 = 0.100.** Identical. A flat 10% row-level error reproduces both sides, and the two
+stray participations are what that error looks like when it lands on an above-q row.
+
+### 🛑 G11 AND G14 WERE REGISTERED WITH ONE INEQUALITY REVERSED
+
+`ladder_score.py` run as registered reports **`D = 1; the model resolves at least 0 and
+fewer than 2 hex digits`** — the opposite of what the arm measured. That verdict is what
+sent me back to the clauses, so **the correction was made with the data in hand**, and it
+is declared as post-hoc in Amendment 9. It stands on two arguments that need **no data**:
+
+1. **One reachable output.** G12 declares the arm valid only if the j=1 above-q cell is
+   <= 0.25. G11 takes `D` = the *smallest* j whose cell is <= 0.25. On any valid arm that
+   is j = 1, always. **G11 as registered can only ever return D = 1, or refuse** — the
+   same cell read as "the anchor passed" and as "the ceiling is one digit".
+2. **0 of 7 known-depth oracles.** `ladder_validate.py` manufactures the answers a model
+   resolving exactly K0 digits must give, and the registered rule recovers the true depth
+   in **none** of them — it calls a perfect 2-digit truncator "non-monotone", and the same
+   for 3, 4, 5 and 6. The corrected rule recovers **8 of 8**.
+
+The repair has exactly one degree of freedom — the direction of one comparison — and the
+construction fixes it: participation means *value < q*, so HIGH above-q participation at
+depth j means the model resolved **<= j** digits. The ladder steps **UP** at j = K0.
+G12 already used that direction, which is why the clauses contradicted.
+
+**And the worse half, stated because it is worse:** under the registered rule no valid arm
+could ever have falsified it. A rule with one reachable output is not a pre-registration.
+The outcome now reported — "no ceiling at <= 7 digits" — was itself a registered branch
+(G14); only the inequality routing to it was wrong. `ladder_score.py` prints **both**
+verdicts, labelled, and nothing registered has been deleted.
+
+### What this does and does not say
+
+- It is about **one model at one target rate with reasoning on**. `gemini-3.5-flash`.
+- **A truncation account is a proxy for precision, not a mechanism.** D is the depth at
+  which answers stop tracking the true comparison; it is not a claim that truncation
+  happens. The model may compute the full value with depth-dependent error.
+- **The conspicuousness confound is declared and unmeasured.** A prefix of five `5`s says
+  "this is near 1/3". G13's control floor at 0.90 shows the model is not simply declining
+  to play, but Amendment 8's limitation 1 was *withdrawn* for this arm — reasoning traces
+  were never requested by the collector (Ruler 21), and the instrument was not changed
+  mid-measurement. Testable in a later arm; not testable in this one.
+- **The 10% error floor is the real limit on how deep this design can ever see.** At
+  eps = 0.1 and 2 rows per cell, a single rung's evidence is worth a factor of ~2. Reading
+  past 7 digits needs more rows per cell, not more depths.
+
+### What the next fire does
+
+- **Arm 5 is CLOSED. Do not collect more rows into it** — the arm is at its registered n.
+- If the precision question is pushed deeper, it is a **NEW arm**: depths 7–10, >= 6 rows
+  per cell to beat the 10% error floor, and `--traces` ON from the first call so the
+  conspicuousness confound is finally measured. Register it before spending a call.
+- The letter to Ezaki et al. (22 Oct) asked at what precision the threshold rule reads.
+  **There is now an answer to send: at least 7 hex digits of 32, with a 10% row-error
+  floor.** Waiting on their reply first — do not write again before 1 Nov.
+
+---
+
+# Results — ARM 4 CLOSED AT 32/32 (25 Oct 2026, fire 368). Superseded by the arm-5 section above; kept unedited.
 
 ## ARM 4, CLOSED: the leading-digit accounts are dead and the threshold account is ESTABLISHED
 
@@ -87,7 +219,7 @@ K = 2, and zero rows at K >= 3.** The arm establishes **two hex digits** and has
 past them. The 31/32 fit at K = 8 is one number reported six times. That is what arm 5 is
 for.
 
-## ARM 5 (the precision ladder, Amendment 8): 34 of 40, 7 of 12 cells complete, NO DEPTH MAY BE REPORTED
+## ARM 5 at 34 of 40 (fire 368) — SUPERSEDED by the closed arm above; kept unedited
 
 `ladder_score.py` owns this file and `analyse.py` **refuses** it by name — Amendment 8 scores
 per-depth *cells*, and a pooled E_threshold across the ladder invites exactly the reading the

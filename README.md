@@ -161,17 +161,81 @@ tell it apart from the full 128-bit comparison at all: **16 rows at K = 1
 So the arm establishes **two hex digits** and has no power past them. The 31/32
 fit at K = 8 is one number reported six times.
 
-The arm that settles the digit count — **arm 5, the precision ladder** — is
-registered as Amendment 8 and is at **34 of 40, with 7 of its 12 cells
-complete.** Its registered rule scores per-depth cells, so **no depth is named
-here and none will be until the cells close.** In particular the anchor cell
-(G12, j = 1 above *q*) stands at 3 of 4, and Amendment 8 says that alone forbids
-reporting a depth. `analyse.py` refuses the file by name; `ladder_score.py`
-prints the cell table and declines to name a depth. The per-cell counts are in
-RESULTS.md, in the arm-5 section, so you can see exactly what is and is not
-there — the above-*q* column is suggestive in the direction the arm was built to
-test and is also drawn from cells of size one to four, which is a sample size at
-which suggestive is free.
+## The precision ladder (arm 5) — CLOSED at 40 of 40: at least seven hex digits
+
+Arm 4 could see two digits. Arm 5 was built to read the depth off directly, and
+it is now complete: **40 of 40, 40 parsed, 0 transport errors, 12 of 12 cells
+complete**, collected over four days against a ~20-call daily cap.
+
+*q* = 1/3 is `0x0.5555…` repeating, so an identifier `('5' × j) + d + tail` with
+`d ≥ 6` has an exact property: every truncation to `K ≤ j` hex digits lands
+**below** *q* and the truncation to `j+1` lands **above** it. One identifier per
+depth separates "resolves ≤ *j* digits" from "resolves ≥ *j*+1". The `d ≤ 4` rows
+are the matched control where the full value and every truncation agree.
+
+| depth *j* | above-*q* participated | control (below *q*) |
+|---|---|---|
+| 1 | 0/4 | 4/4 |
+| 2 | 0/4 | 3/4 |
+| 3 | 1/4 | 4/4 |
+| 4 | 1/4 | 4/4 |
+| 5 | 0/2 | 2/2 |
+| 6 | 0/2 | 2/2 |
+| **pooled** | **2/20** | **18/20** |
+
+**E_threshold = +0.800, Fisher exact two-sided p = 5.3 × 10⁻⁷.** The *j* = 6
+above-*q* identifiers sit **5 × 10⁻⁹ from 1/3** — getting them right needs seven
+correct hex digits — and the model got both of them right.
+
+**No above-*q* cell reaches 0.75 at any depth through 6: no resolution ceiling at
+≤ 7 hex digits.** `ladder_depth.py` fits a per-row error rate and compares
+candidate depths: **"deeper than 6" beats "exactly 6" by a likelihood ratio of
+49.7** and every shallower depth by ≥ 1.1 × 10³, at a fitted error rate of 0.100.
+It validates against all eight known-depth oracles before printing a number.
+
+**Where the evidence is thin, said plainly.** `precision.py` has 20/16/12/8/4/2
+discriminating rows at K = 1…6 (against arm 4's 16 and 2). K ≤ 3 is excluded
+cell-by-cell (p = 4.0 × 10⁻⁴, 4.2 × 10⁻³, 0.039); **K = 4, 5 and 6 rest on the
+pooled fit alone, and the K = 6 cell on its own is 0/2, which is p = 0.50.** The
+strength at the deep end is the monotone consistency of six rungs, not any one
+rung.
+
+**And the two stray participations are noise, with the control to prove it.** The
+error rate on above-*q* rows is 2/20 = 0.100; on the control rows, where no
+account predicts anything but participate, it is also **2/20 = 0.100**. Identical.
+That flat 10% row error is also the design's ceiling: at 2 rows per cell one rung
+is worth a factor of ~2, so reading past 7 digits needs more rows per cell, not
+more depths.
+
+### 🛑 And the registered decision rule had an inequality backwards
+
+Scored exactly as registered, Amendment 8's G11 reports *"D = 1; the model
+resolves at least 0 and fewer than 2 hex digits"* — the opposite of the above.
+That verdict is what sent me back to the clauses, so the correction was made
+**with the data in hand**, and it is declared as post-hoc in Amendment 9. It
+stands on two arguments that use no data at all:
+
+1. **It had one reachable output.** G12 declares the arm valid only if the *j* = 1
+   above-*q* cell is ≤ 0.25. G11 takes *D* = the **smallest** *j* whose cell is
+   ≤ 0.25. On any valid arm that is *j* = 1, always. The two clauses read the same
+   cell as "the anchor passed" and as "the ceiling is one digit". **A rule with
+   one reachable output cannot be falsified, which is the whole point of
+   registering it** — and that is a worse defect than the typo.
+2. **It recovers the truth in 0 of 7 known-depth oracles.** `ladder_validate.py`
+   manufactures the answers a model resolving *exactly* K₀ digits must give on
+   these 40 identifiers — fixed with no freedom by the construction's own
+   assertions — and runs each through the rule. It calls a perfect 2-digit
+   truncator "non-monotone, the truncation family is falsified", and the same for
+   3, 4, 5 and 6. The corrected rule: **8 of 8.**
+
+The repair has exactly one degree of freedom, the direction of one comparison,
+and the construction fixes it: participation means *value* < *q*, so HIGH
+above-*q* participation at depth *j* means the model resolved ≤ *j* digits. The
+ladder steps **up** at *j* = K₀. G12 already used that direction.
+
+**Nothing registered was deleted.** `ladder_score.py` prints both verdicts side
+by side, and the outcome now reported — "no ceiling at ≤ 7 digits" — was itself a
+registered branch (G14); only the inequality routing to it was wrong.
 
 
 ## A prediction of mine that failed, kept because it failed
@@ -198,7 +262,7 @@ Re-collecting needs `~/.gemini_api_key` and `run_gemini.py`.
 answers35_q3_nothink.json          arm 1, reasoning off,  64/64
 answers35_q3_think.json            arm 2, reasoning on,   64/64
 answers35_q3_think_bucket5.json    arm 4, first-digit-5,  32/32  CLOSED
-answers35_q3_think_ladder.json     arm 5, precision ladder, 34/40  PARTIAL, unscored
+answers35_q3_think_ladder.json     arm 5, precision ladder, 40 of 40  CLOSED
 ```
 
 Every answer row carries the identifier, the stratum, the raw model output and
@@ -211,10 +275,18 @@ the parse. API-key fingerprints are redacted; nothing else is touched.
   is unfunded.
 - **Not a faithfulness claim.** I never treat a reasoning summary as an account
   of the computation. Where I quote one it is as a hypothesis generator.
-- **Arm 4 is closed; arm 5 is not.** Both single-character accounts are dead,
-  and the arm has power to two hex digits and none past them. How many digits the
-  model actually reads is open, and the arm built to answer it is six rows short
-  of being scorable.
+- **A truncation account is a proxy for precision, not a mechanism.** "At least
+  seven hex digits" means the model's answers still track the true comparison at
+  5 × 10⁻⁹ from *q*. It is not a claim that a truncation happens anywhere; the
+  model may compute the full value with a depth-dependent error.
+- **Arm 5 cannot see past 7 digits**, because its deepest rung is *j* = 6. "Reads
+  7 digits" and "reads all 32" are the same hypothesis in this design.
+- **The conspicuousness confound is declared and unmeasured.** A prefix of five
+  `5`s announces that the number is near 1/3. The control floor at 0.90 shows the
+  model is not simply declining to play, but Amendment 8's promise to read the
+  reasoning traces for signs it noticed was **withdrawn** — the collector never
+  requested thought summaries (Ruler 21 in CAIRN.md), and the instrument was not
+  changed in the middle of a registered measurement.
 
 ## Files
 

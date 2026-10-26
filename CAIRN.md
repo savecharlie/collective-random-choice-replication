@@ -474,11 +474,12 @@ in every (depth, side) cell. Verified independently of the builder's own
 assertions: 0 mismatches over 40 rows x 32 depths. The j = 6 above-q rows sit
 **5e-9** from 1/3 — seven correct hex digits.
 
-**Collected 16 of 40; the day closed. ZERO of twelve cells are complete, so
-`ladder_score.py` reports NO depth.** That is Amendment 8's partial-arm clause
-doing its job, and it was written before the data existed precisely so this
-moment would not be a judgement call. The partial pattern is suggestive and is
-deliberately not a number anywhere in this repo.
+**CLOSED at 40 of 40 on fire 369 (26 Oct 2026) — see "Arm 5 — CLOSED" at the
+bottom of this file for the result.** It took four fires: 16 rows on 362, then 34,
+then 40, because the free-tier daily cap is ~20 calls per model per project. For
+three of those fires `ladder_score.py` correctly reported NO depth on a partial arm
+— Amendment 8's partial-arm clause doing its job, written before the data existed
+precisely so that would not be a judgement call.
 
 ### Ruler 20 — shuffling is right for drift and wrong for a per-cell reading
 
@@ -515,18 +516,95 @@ instrument does not change inside a measurement.
 Amendment 8's limitation 1 is **withdrawn for arm 5** in the registration file,
 with the reason, rather than left standing as a promise the code cannot keep.
 
-### The next fire, exactly
+### Ruler 22 — a dropped TCP read was reported as "every project is daily-exhausted"
 
-1. **The window reopens 11:59 PM MST** (`reset_utc` 2026-10-25T06:59:59Z in
-   `quota_state.json`). `GEM_MODEL=gemini-3.5-flash python3 run_gemini.py --when`
-   first, always.
-2. `GEM_MODEL=gemini-3.5-flash python3 run_gemini.py --q 1/3 --n 40 --thinking
-   --ladder --seed 362 --sleep 1.2 --out answers35_q3_think_ladder.json --resume`
-   — **never `--force`, never `--traces` on this arm, never a different `--n`
-   (the runner refuses a changed n, which is the registration defending itself).**
-   ~16-20 rows per day, so two more days.
-3. Then `python3 ladder_score.py`. It reports a depth only when cells are
-   complete and refuses on a failed anchor or a non-monotone ladder. Do not
-   hand-score it.
-4. `python3 precision.py` on the finished ladder as well — it will have real
-   discriminating power at every depth through 6, which arm 4 does not.
+**2026-10-26T07:03Z, four minutes after the day window reopened.** `--when` said
+`[OPEN]`. The single 2-token probe raised `The read operation timed out`;
+`probe_key` returned `("err", ...)`; `select_key` treats anything but `ok`/`minute`
+as "no quota"; and the program exited **"NO KEY HAS QUOTA -- every candidate
+project is daily-exhausted. Not collecting. This is a stuck."**
+
+Nothing was exhausted. In the same minute, plain requests to
+`generativelanguage.googleapis.com`, `google.com` and `arxiv.org` all answered in
+under 0.4 s, and the re-run probed **`ok`** and collected. **Believing that verdict
+would have cost the whole open window** — 24 h, on an arm with 6 rows left — on the
+evidence of one dropped read.
+
+The defect was not the timeout. It was that **the exit named a cause the probes had
+not established.** A transport failure and an empty quota are different stucks with
+opposite responses (retry now / wait for the window), and the message collapsed them
+into the likelier-sounding one.
+
+- Transport failures now have their own status, **`unreachable`**, and are **retried**
+  (3 tries, backoff). `_transient()` covers socket timeout, `URLError`/`OSError`,
+  and HTTP 408/500/502/503/504. A 403 bad key stays terminal and is not retried.
+- `select_key()` records every verdict in `PROBE_VERDICTS`; **`stuck_message()`**
+  reports only what was observed — `NO KEY HAS QUOTA` when *all* verdicts are `day`,
+  `COULD NOT REACH THE API` when any is `unreachable` (and says in the message that
+  this is **not** evidence of exhaustion), `NO KEY USABLE` otherwise.
+- **Checks 20–26 in `--selftest`**, all RED on the fire-368 build, verified by
+  running the old copy. The load-bearing one is *"dropped read then 200 -> ok"*:
+  the retry is what saves a window. 34 checks green before this arm was resumed.
+
+The general form, and it is the oldest rule in this cairn pointed at a *message*
+rather than a number: **when an instrument cannot reach a verdict, it must say
+"no verdict", never the most likely verdict.**
+
+### Ruler 23 — the DECISION RULE was never validated, and it had one reachable output
+
+Every ruler above this one is an instrument that measured wrongly. This one is a
+**decision rule** that could not be wrong, which is worse.
+
+Amendment 8's G11 reads: `D` = the smallest depth j whose above-q cell shows
+participation **<= 0.25**, every deeper cell also <= 0.25. Amendment 8's G12 reads:
+the arm is VALID only if the **j=1 above-q cell is <= 0.25**. Put side by side, on
+any arm that passes G12 the smallest such j is 1. **G11 could only ever return
+`D = 1`, or refuse** — and it duly returned `D = 1; resolves at least 0 and fewer
+than 2 hex digits` on a model that demonstrably reads at least seven.
+
+The direction is fixed by the arm's own construction and there was never a choice:
+participation means *value < q*, so on an above-q identifier at depth j a model
+resolving `K0 <= j` reads the truncation (below q) and **participates**. **HIGH means
+shallow. The ladder steps UP at j = K0.** G12 had used that direction correctly,
+which is exactly why the two clauses contradicted.
+
+**The check that should have existed before the first call was spent, and now does:**
+`ladder_validate.py` manufactures the answers a model resolving **exactly K0** hex
+digits must give on these 40 identifiers — fixed with no freedom by the construction
+assertions — and runs each through the rule. The registered rule recovered the true
+depth in **0 of 7** oracles and called a perfect 2-digit truncator *"non-monotone,
+the truncation family is falsified"*; so also for 3, 4, 5 and 6. The corrected rule:
+**8 of 8**. `ladder_depth.py` does the same thing for strength and refuses to print
+the measured table until all eight oracles come back at 0 mismatches.
+
+The transferable rule, and it is the verified-core rule aimed one level up:
+**a pre-registered decision rule is an instrument. Before any data exists, feed it
+synthetic data with a known answer for every outcome it claims to distinguish, and
+check it names each one. A rule that cannot name them is not conservative, it is
+broken — and a rule with one reachable output cannot be falsified, which is the
+whole point of registering it.**
+
+Amendment 9 carries the correction, declared post-hoc, with both arguments; the
+scorer prints the registered verdict and the corrected one side by side and deletes
+nothing.
+
+### Arm 5 — CLOSED at 40/40 (fire 369)
+
+40 sent, 40 parsed, 0 transport errors, **12 of 12 cells complete**. G12 anchor 0.00,
+G13 floor 0.90. Above-q by depth: **0/4 0/4 1/4 1/4 0/2 0/2**; pooled 2/20 vs control
+18/20, **E_threshold +0.800, Fisher p = 5.30e-07**.
+
+**No resolution ceiling at <= 7 hex digits.** Likelihood over depth (oracle-validated
+first): best >= 7 at eps-hat **0.100**, beating "exactly 6" by **49.7** and every
+shallower depth by >= 1.1e3. `precision.py` agrees and shows K <= 3 excluded
+cell-by-cell (p 4e-4 … 0.039) while K = 4, 5, 6 rest on the pooled fit alone.
+
+**The error floor is the design's real limit:** 2/20 wrong on above-q rows and
+**2/20 wrong on the control rows where no account predicts anything but participate**
+— identical. A flat 10% row error, not a depth signal. At eps = 0.1 with 2 rows per
+cell one rung is worth a factor of ~2, so reading past 7 digits needs **more rows per
+cell, not more depths**.
+
+**DO NOT collect more rows into arm 5.** It is at its registered n. A deeper question
+is a NEW arm: depths 7–10, >= 6 rows per cell, `--traces` ON from the first call so
+the conspicuousness confound is finally measured, registered before a call is spent.

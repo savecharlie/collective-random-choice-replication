@@ -69,19 +69,50 @@ def main(path=os.path.join(HERE, "answers35_q3_think_ladder.json")):
     print("\nG11 above-q ladder (complete cells only):")
     for j, v in ab:
         print(f"  j={j}: {v[0]}/{v[1]} = {v[0]/v[1]:.2f}")
-    low = [j for j, v in ab if v[0] / v[1] <= 0.25]
     if len(ab) < len(rules.LADDER_PLAN):
         print("  incomplete ladder -- G11 needs every above-q cell; nothing named yet.")
         return
-    if not low:
-        print("G14: no resolution ceiling found at <= 7 hex digits")
-        return
-    D = min(low)
-    if any(v[0] / v[1] > 0.25 for j, v in ab if j > D):
-        print(f"G11: NON-MONOTONE (low at j={D}, high beneath it) -- "
-              "the truncation family is falsified; no depth reported")
-        return
-    print(f"G11: D = {D}; the model resolves at least {D-1} and fewer than {D+1} hex digits")
+
+    # ------------------------------------------------------------------ G11 / G14
+    # AMENDMENT 9 (fire 369): Amendment 8 wrote G11 and G14 with one inequality
+    # reversed. The construction in rules.ladder_identifiers fixes the direction:
+    # participation means value < q, so on an above-q identifier at depth j a model
+    # resolving K0 <= j reads the truncation (below q) and PARTICIPATES, while one
+    # resolving K0 >= j+1 reads past it and abstains. The ladder therefore steps UP
+    # at j = K0, and the registered "smallest j with cell <= 0.25" is the opposite
+    # test. Proof it is broken, with no data: G12 declares the arm valid only if the
+    # j=1 above-q cell is <= 0.25, so on every valid arm G11-as-registered returns
+    # D=1 and nothing else -- one reachable output. ladder_validate.py adds the
+    # known-answer version: the registered rule recovers the true depth in 0 of 7
+    # oracles and calls five of them "non-monotone".
+    # BOTH verdicts are printed. A registered rule is not quietly replaced.
+    def registered(ab):
+        low = [j for j, v in ab if v[0] / v[1] <= 0.25]
+        if not low:
+            return "G14 as registered: no resolution ceiling found at <= 7 hex digits"
+        D = min(low)
+        if any(v[0] / v[1] > 0.25 for j, v in ab if j > D):
+            return ("G11 as registered: NON-MONOTONE (low at j=%d, high beneath it)"
+                    % D)
+        return ("G11 as registered: D = %d; 'resolves at least %d and fewer than %d "
+                "hex digits'" % (D, D - 1, D + 1))
+
+    def corrected(ab):
+        high = [j for j, v in ab if v[0] / v[1] >= 0.75]
+        if not high:
+            return ("G14' CORRECTED: no resolution ceiling found at <= 7 hex digits "
+                    "-- the model tracked the true comparison at every rung")
+        D = min(high)
+        if any(v[0] / v[1] < 0.75 for j, v in ab if j > D):
+            return ("G11' CORRECTED: NON-MONOTONE (high at j=%d, low beneath it) -- "
+                    "the truncation family is falsified; no depth reported" % D)
+        return "G11' CORRECTED: D = %d; the model resolves exactly %d hex digits" % (D, D)
+
+    print(f"\n  {registered(ab)}")
+    print(f"  {corrected(ab)}")
+    print("  (Amendment 9 explains why these differ and why the correction is forced;"
+          "\n   ladder_validate.py is the known-answer check, ladder_depth.py the"
+          " strength.)")
 
 
 if __name__ == "__main__":
